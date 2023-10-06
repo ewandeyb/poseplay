@@ -28,8 +28,7 @@ The main concept of this code is detect keypoint for movement and then send or p
 
 To use this code for automating keypress actions in Subway Surfers, follow these steps:
 
-1. Make sure you have the required dependencies installed: TensorFlow, TensorFlow Hub, OpenCV, and NumPy.
-- ```pip install -r requirements.txt```
+1. Make sure you have the required dependencies installed with ```pip install -r requirements.txt```
 
 2. Connect a webcam or ensure that your camera device is accessible by specifying the `--device` argument with the appropriate camera device index.
 

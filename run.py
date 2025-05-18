@@ -1,4 +1,6 @@
 import cv2 as cv
+import cvzone
+from cvzone.SelfiSegmentationModule import SelfiSegmentation
 import tensorflow as tf
 import tensorflow_hub as hub
 import numpy as np
@@ -80,7 +82,6 @@ def run_inference(model, input_size, image):
         scores.append(score)
 
     return keypoints, scores
-
 
 def draw_keypoints(image, keypoints, scores, keypoint_score_th):
     circle_color_outer = (255, 255, 255)  # White
@@ -281,6 +282,18 @@ def draw_keypoints(image, keypoints, scores, keypoint_score_th):
 
     return image, movement
 
+def apply_background_replacement(frame, bg_image, segmentor, use_background):
+    """
+    Applies background replacement if enabled.
+    """
+    if use_background and bg_image is not None:
+        # Resize background to match frame dimensions
+        resized_bg = cv.resize(bg_image, (frame.shape[1], frame.shape[0]))
+        # Replace background
+        processed_frame = segmentor.removeBG(frame, resized_bg, threshold=0.5)
+    else:
+        processed_frame = frame
+    return processed_frame
 
 def main():
     """
@@ -306,6 +319,22 @@ def main():
 
     # Last movement
     last_movement = "Standing"
+    
+    # Initialize segmentor
+    segmentor = SelfiSegmentation()
+    
+    # Load background image
+    try:
+        bg_image = cv.imread("background.jpeg")
+        if bg_image is None:
+            raise Exception("Could not load background.jpeg")
+        print("Background image loaded successfully!")
+        use_background = True
+    except Exception as e:
+        print(f"Error loading background: {e}")
+        print("Will continue without background replacement.")
+        use_background = False
+        bg_image = None
 
     # Exit if camera not opened
     if not cap.isOpened():
@@ -323,16 +352,32 @@ def main():
         # Flip frame for mirroring
         frame = cv.flip(frame, 1)
 
-        # Run inference
-        keypoints, scores = run_inference(model, input_size, frame)
+        # Apply background replacement using the new function
+        processed_frame = apply_background_replacement(frame, bg_image, segmentor, use_background)
+            
+        # Run inference on the processed frame
+        keypoints, scores = run_inference(model, input_size, processed_frame)
 
-        # Copy frame
-        frame_copy = copy.deepcopy(frame)
+        # Copy processed frame
+        frame_copy = copy.deepcopy(processed_frame)
         
         # Draw frame with keypoints
         draw_frame, frame_movement = draw_keypoints(
             frame_copy, keypoints, scores, keypoint_score_th 
         )
+        
+        # Display background status
+        if use_background and bg_image is not None:
+            cv.putText(
+                draw_frame,
+                "Custom Background: ON (Press 'B' to toggle)",
+                (10, draw_frame.shape[0] - 10),
+                cv.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                (255, 255, 255),
+                1,
+                cv.LINE_AA,
+            )
 
         # Movement keypress
         if frame_movement == "Right":
@@ -375,8 +420,13 @@ def main():
 
                 last_movement = "Standing"
                 log_info("Movement: Standing")
+                
         if frame_movement == "Pause/Resume":
-            pyautogui.press("esc")
+            if last_movement != "Pause/Resume":
+                pyautogui.press("esc")
+                log_info("Keypress: Pause/Resume")
+                last_movement = "Pause/Resume"
+                log_info("Movement: Pause/Resume")
 
         if frame_movement == "Power Up":
             pyautogui.press("space")
@@ -387,8 +437,15 @@ def main():
             # q to exit
             if cvkey == ord('q'):
                 break
+                
+            # b to toggle background
+            if cvkey == ord('b') and bg_image is not None:
+                use_background = not use_background
+                status = "ON" if use_background else "OFF"
+                log_info(f"Custom Background: {status}")
+                
         # Display frame
-        cv.imshow("frame", draw_frame)
+        cv.imshow("Subway Surfer Controller", draw_frame)
 
     # Release camera
     cap.release()

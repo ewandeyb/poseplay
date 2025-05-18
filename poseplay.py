@@ -194,7 +194,8 @@ st.set_page_config(page_title="Poseplay Controller", layout="wide")
 st.title("Poseplay Controller (Subway Surfer)")
 
 # Set up the sidebar with toggle controls
-st.sidebar.title("Display Controls")
+st.sidebar.title("Settings")
+threshold = st.sidebar.slider("Keypoint Score Threshold", 0.0, 1.0, 0.3, 0.01)
 use_background = st.sidebar.checkbox("Show Background", value=True)
 show_skeleton = st.sidebar.checkbox("Show Skeleton", value=True)
 show_guidelines = st.sidebar.checkbox("Show Guidelines", value=True)
@@ -212,7 +213,7 @@ with col2:
     st.markdown("""
     Move your body to control Subway Surfers:
     
-    - **Left/Right**: Move shoulders across center line
+    - **Left/Right**: Move either shoulder across center line
     - **Jump**: Raise head above top line
     - **Crouch**: Lower head below bottom line
     - **Power Up**: Raise one hand
@@ -281,11 +282,11 @@ try:
             processed_frame = frame
             
         # Run inference
-        keypoints, scores = run_inference(model, 192, processed_frame)
+        keypoints, scores = run_inference(model, 192, processed_frame) # 192 is the fixed input size for movenet
         
         # Draw visualization
         visualization, frame_movement = draw_keypoints(
-            processed_frame, keypoints, scores, 0.3, 
+            processed_frame, keypoints, scores, threshold, 
             show_skeleton=show_skeleton, 
             show_guidelines=show_guidelines
         )

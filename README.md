@@ -1,47 +1,59 @@
-# subwaysurf-movenet
+# PosePlay: Motion Gaming Interface
 
-This code is intended to automate keypress actions in the popular mobile game Subway Surfers using pose detection. It uses TensorFlow and OpenCV to capture the player's movements through a webcam and translates those movements into keypress events.
+## Original Source Attribution
+This project is based on code from [bahirul/subwaysuft-movenet](https://github.com/bahirul/subwaysuft-movenet). The original implementation was designed specifically for controlling Subway Surfers, through websites such as https://poki.com/en/g/subway-surfers with only using body movements. 
 
-## Concept
+I've added hand gestures for power-ups, pausing or resuming the game, GUI to display current movements, and a filter.
 
-The main concept of this code is detect keypoint for movement and then send or press keyboard key to control the game. The keypoint is detected using MoveNet Lightning model from TensorFlow Hub. The model is trained to detect 17 keypoints of human body. For more information about the model, you can read [here](https://tfhub.dev/google/movenet/singlepose/lightning/4).
+## Project Overview
+PosePlay is an interactive computer vision application that translates physical body movements into keyboard inputs for controlling web browser games such as Subway Surfers. Using TensorFlow and OpenCV, it captures the player's movements through a webcam and converts those movements into keypress events using pyautogui, allowing for hands-free gameplay.
 
-## Features
+## Key Features
+- **Real-time Pose Detection**: Uses Google's MoveNet Lightning model to detect 17 keypoints of the human body
+- **Gesture Recognition**: Identifies movements like left/right movements, jumping, crouching, and hand raises
+- **Customizable Controls**: Maps physical movements to keyboard actions for compatible games
+- **Visual Feedback**: Displays a skeleton overlay to help users understand their detected movements
+- **Configurable Settings**: Adjust sensitivity parameters and toggle functionality as needed
 
-- Detects the player's pose using the MoveNet Lightning model from TensorFlow Hub.
-- Recognizes key movements such as running left, running right, jumping, and crouching.
-- Automatically simulates corresponding keypress actions based on the detected movements.
-- Allows the user to toggle keypress actions on and off using the spacebar.
-- Provides real-time feedback on the detected movements and keypress actions through the webcam feed.
-- Logs keypress and movement actions with timestamps for reference.
+## Improvements Over Original Implementation
+- Added GUI for easier configuration and visualization
+- Expanded gesture recognition capabilities
+- Enhanced visual feedback with customizable display options
 
-## Requirements
+## Technical Requirements
+- Python 3.6 or higher
+- TensorFlow 2.5.0 or higher
+- TensorFlow Hub 0.12.0 or higher
+- OpenCV 4.5.2 or higher
+- NumPy 1.19.5 or higher
+- PyAutoGUI for keyboard control
+- [GUI framework: Tkinter/PyQt/etc.]
 
-1. Python 3.6 or higher (Download from [here](https://www.python.org/downloads/))
-2. TensorFlow 2.5.0 or higher (See usage section step 1 for installation)
-3. TensorFlow Hub 0.12.0 or higher (See usage section step 1 for installation)
-4. OpenCV 4.5.2 or higher (See usage section step 1 for installation)
-5. NumPy 1.19.5 or higher (See usage section step 1 for installation)
+## Usage Instructions
+1. Install dependencies: `pip install -r requirements.txt`
+2. Launch the application: `python poseplay.py`
+3. Use the GUI to configure your camera and control preferences
+4. Stand in front of your camera where your full body is visible
+5. Control games with the following movements:
+   - **Move Right**: Position your body toward the right side of the frame
+   - **Move Left**: Position your body toward the left side of the frame
+   - **Jump**: Raise your shoulders to the upper portion of the frame
+   - **Crouch**: Lower your head to the lower portion of the frame
+   - **Action Button**: Raise either hand above shoulder level
+   - **Pause/Resume** : Raise both hands above shoulder level
+6. Press ESC to exit or use the GUI controls to stop the application
 
+## Future Enhancements
+- Additional gesture recognition capabilities
+- Different filters based on game that you're playing
 
-## Usage
+## Acknowledgments
+- Original implementation by [bahirul](https://github.com/bahirul)
+- MoveNet model from [TensorFlow Hub](https://tfhub.dev/google/movenet/singlepose/lightning/4)
 
-To use this code for automating keypress actions in Subway Surfers, follow these steps:
+## License
+[Include appropriate license information]
 
-1. Make sure you have the required dependencies installed with ```pip install -r requirements.txt```
+---
 
-2. Connect a webcam or ensure that your camera device is accessible by specifying the `--device` argument with the appropriate camera device index.
-
-3. Customize the frame width and height using the `--width` and `--height` arguments if needed.
-
-4. Run the script. The webcam feed will open, and the code will begin detecting your movements.
-
-5. Use the following movements to control the game:
-   - Right: Move your right hip to the right side of the frame.
-   - Left: Move your left hip to the left side of the frame.
-   - Jump: Jump until left shoulder and right shoulder on top frame.
-   - Crouch: Lower your head below on the frame.
-
-6. Press the spacebar to toggle keypress actions on and off.
-
-7. To exit the script, press the "ESC" key.
+*This project was developed as part of CMSC 191 - Computer Vision in Python final project.*

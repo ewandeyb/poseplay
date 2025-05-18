@@ -33,7 +33,7 @@ PosePlay is an interactive computer vision application that translates physical 
 1. Install dependencies: `pip install -r requirements.txt`
 2. Launch the application: `python poseplay.py`
 3. Use the GUI to configure your camera and control preferences
-4. Stand in front of your camera where your full body is visible
+4. Stand or sit in front of your camera where both bottom points on your hips are visible.
 5. Control games with the following movements:
    - **Move Right**: Position your body toward the right side of the frame
    - **Move Left**: Position your body toward the left side of the frame

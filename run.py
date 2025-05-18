@@ -42,7 +42,6 @@ def get_args():
 
     return args
 
-
 def run_inference(model, input_size, image):
     """
     Run inference on image to get keypoints and scores
@@ -83,7 +82,7 @@ def run_inference(model, input_size, image):
     return keypoints, scores
 
 
-def draw_keypoints(image, keypoints, scores, keypoint_score_th, toggle_keypress):
+def draw_keypoints(image, keypoints, scores, keypoint_score_th):
     circle_color_outer = (255, 255, 255)  # White
     circle_color_inner = (0, 0, 255)  # Red
     line_skeleton_color = (0, 255, 0)  # Green
@@ -213,25 +212,17 @@ def draw_keypoints(image, keypoints, scores, keypoint_score_th, toggle_keypress)
     if keypoints[0][1] > image.shape[0] / 5 * 2:
         movement = "Crouch"
 
-    # If hands are raised pause the game.
+    # If both hands are raised pause the game.
+    if keypoints[8][1] < image.shape[0] / 5 * 2 and keypoints[7][1] < image.shape[0] / 5 * 2:
+        movement = "Pause/Resume"
+    # If either hand is raised power up
+    elif keypoints[8][1] < image.shape[0] / 5 * 2 or keypoints[7][1] < image.shape[0] / 5 * 2:
+        movement = "Power Up"
     # ESC to exit text
     cv.putText(
         image,
-        "Press ESC to exit",
+        "Press q to exit",
         (10, 30),
-        cv.FONT_HERSHEY_SIMPLEX,
-        0.5,
-        (255, 255, 255),
-        1,
-        cv.LINE_AA,
-    )
-
-    # Space to toggle keypress text
-    keypress_state = "Enabled" if toggle_keypress else "Disabled"
-    cv.putText(
-        image,
-        "Press SPACE to toggle keypress [{}]".format(keypress_state),
-        (10, 60),
         cv.FONT_HERSHEY_SIMPLEX,
         0.5,
         (255, 255, 255),
@@ -243,7 +234,7 @@ def draw_keypoints(image, keypoints, scores, keypoint_score_th, toggle_keypress)
     cv.putText(
         image,
         "Movement:",
-        (10, 90),
+        (10, 60),
         cv.FONT_HERSHEY_SIMPLEX,
         0.5,
         (255, 255, 255),
@@ -255,7 +246,7 @@ def draw_keypoints(image, keypoints, scores, keypoint_score_th, toggle_keypress)
     cv.putText(
         image,
         movement,
-        (100, 90),
+        (100, 60),
         cv.FONT_HERSHEY_SIMPLEX,
         0.5,
         (255, 255, 255),
@@ -313,9 +304,6 @@ def main():
     model_load = hub.load(model_url)
     model = model_load.signatures["serving_default"]
 
-    # Enable Keypress
-    enable_keypress = True
-
     # Last movement
     last_movement = "Standing"
 
@@ -340,76 +328,65 @@ def main():
 
         # Copy frame
         frame_copy = copy.deepcopy(frame)
-
+        
         # Draw frame with keypoints
         draw_frame, frame_movement = draw_keypoints(
-            frame_copy, keypoints, scores, keypoint_score_th, enable_keypress
+            frame_copy, keypoints, scores, keypoint_score_th 
         )
 
         # Movement keypress
         if frame_movement == "Right":
             if last_movement != "Right":
-                if enable_keypress:
-                    pyautogui.press(KEY_RIGHT)
-                    log_info("Keypress: Right")
+                pyautogui.press(KEY_RIGHT)
+                log_info("Keypress: Right")
                 last_movement = "Right"
                 log_info("Movement: Right")
 
         if frame_movement == "Left":
             if last_movement != "Left":
-                if enable_keypress:
-                    pyautogui.press(KEY_LEFT)
-                    log_info("Keypress: Left")
+                pyautogui.press(KEY_LEFT)
+                log_info("Keypress: Left")
                 last_movement = "Left"
                 log_info("Movement: Left")
 
         if frame_movement == "Jump":
             if last_movement != "Jump":
-                if enable_keypress:
-                    pyautogui.press(KEY_UP)
-                    log_info("Keypress: Up")
+                pyautogui.press(KEY_UP)
+                log_info("Keypress: Up")
                 last_movement = "Jump"
                 log_info("Movement: Jump")
 
         if frame_movement == "Crouch":
             if last_movement != "Crouch":
-                if enable_keypress:
-                    pyautogui.press(KEY_DOWN)
-                    log_info("Keypress: Down")
+                pyautogui.press(KEY_DOWN)
+                log_info("Keypress: Down")
                 last_movement = "Crouch"
                 log_info("Movement: Crouch")
 
         if frame_movement == "Standing":
             if last_movement != "Standing":
                 if last_movement == "Right":
-                    if enable_keypress:
-                        pyautogui.press("left")
-                        log_info("Keypress: Left")
+                    pyautogui.press("left")
+                    log_info("Keypress: Left")
 
                 if last_movement == "Left":
-                    if enable_keypress:
-                        pyautogui.press("right")
-                        log_info("Keypress: Right")
+                    pyautogui.press("right")
+                    log_info("Keypress: Right")
 
                 last_movement = "Standing"
                 log_info("Movement: Standing")
+        if frame_movement == "Pause/Resume":
+            pyautogui.press("esc")
+
+        if frame_movement == "Power Up":
+            pyautogui.press("space")
 
         # Opencv KeyPress
         cvkey = cv.waitKey(1)
         if cvkey:
-            # ESC to exit
-            if cvkey == 27:
+            # q to exit
+            if cvkey == ord('q'):
                 break
-
-            # Space to toggle keypress
-            if cvkey == 32:
-                if enable_keypress:
-                    enable_keypress = False
-                    log_info("Keypress: Disabled")
-                else:
-                    enable_keypress = True
-                    log_info("Keypress: Enabled")
-
         # Display frame
         cv.imshow("frame", draw_frame)
 

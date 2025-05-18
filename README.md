@@ -51,9 +51,6 @@ PosePlay is an interactive computer vision application that translates physical 
 - Original implementation by [bahirul](https://github.com/bahirul)
 - MoveNet model from [TensorFlow Hub](https://tfhub.dev/google/movenet/singlepose/lightning/4)
 
-## License
-[Include appropriate license information]
-
 ---
 
 *This project was developed as part of CMSC 191 - Computer Vision in Python final project.*

@@ -52,14 +52,16 @@ def run_inference(model, input_size, image):
     # Preprocess image
     input_image = cv.resize(image, dsize=(input_size, input_size))  # Resize
     input_image = cv.cvtColor(input_image, cv.COLOR_BGR2RGB)  # BGR to RGB
+    input_image = cv.GaussianBlur(input_image, (5,5),0) # Gaussian blur
     input_image = input_image.reshape(-1, input_size, input_size, 3)
     input_image = tf.cast(input_image, dtype=tf.int32)  # Cast to int32
-
     # Run model
     outputs = model(input_image)
 
     keypoints_with_scores = outputs["output_0"].numpy()
+    print(keypoints_with_scores)
     keypoints_with_scores = np.squeeze(keypoints_with_scores)
+    print(keypoints_with_scores)
 
     # Keypoints, Scores
     keypoints = []
@@ -70,23 +72,7 @@ def run_inference(model, input_size, image):
     
     See: https://tfhub.dev/google/movenet/singlepose/lightning/4
     """
-    for idx in [
-        0,
-        1,
-        2,
-        5,
-        6,
-        7,
-        8,
-        9,
-        10,
-        11,
-        12,
-        13,
-        14,
-        15,
-        16,
-    ]:  # Draw keypoints except ears
+    for idx in [i for i in range(17) if i not in [3,4]]: # Skip left and right ear
         keypoint_x = int(keypoints_with_scores[idx][1] * image_width)
         keypoint_y = int(keypoints_with_scores[idx][0] * image_height)
         score = keypoints_with_scores[idx][2]
@@ -101,8 +87,7 @@ def draw_keypoints(image, keypoints, scores, keypoint_score_th, toggle_keypress)
     circle_color_outer = (255, 255, 255)  # White
     circle_color_inner = (0, 0, 255)  # Red
     line_skeleton_color = (0, 255, 0)  # Green
-    movement_text_color = (0, 0, 0)  # Blue
-
+    
     # Draw line right eye to nose (Left eye on frame because of mirror)
     index1, index2 = 1, 0
     if scores[index1] > keypoint_score_th and scores[index2] > keypoint_score_th:
@@ -207,18 +192,20 @@ def draw_keypoints(image, keypoints, scores, keypoint_score_th, toggle_keypress)
             cv.circle(image, keypoint, 6, circle_color_outer, -1)  # White outer circle
             cv.circle(image, keypoint, 3, circle_color_inner, -1)  # Red inner circle
 
-    # Right Movement (Right hip the right half of the frame, because it's mirrored)
-    if keypoints[10][0] > image.shape[1] / 2:
+    # Horizontal Movement
+    # Right Movement (Right Shoulder the right half of the frame, because it's mirrored)
+    if keypoints[4][0] > image.shape[1] / 2:
         movement = "Right"
-    elif keypoints[9][0] < image.shape[1] / 2:
+    elif keypoints[3][0] < image.shape[1] / 2:
         movement = "Left"
     else:
         movement = "Standing"
 
-    # Jump Movement (Left shoulder, right shoulder in the top 2/5 of the frame)
+    # Vertical Movement
+    # Jump Movement (Left shoulder, right shoulder in the top /5 of the frame)
     if (
-        keypoints[3][1] < image.shape[0] / 5 * 2
-        and keypoints[4][1] < image.shape[0] / 5 * 2
+        keypoints[1][1] < image.shape[0] / 5 
+        and keypoints[2][1] < image.shape[0] / 5
     ):
         movement = "Jump"
 
@@ -226,6 +213,7 @@ def draw_keypoints(image, keypoints, scores, keypoint_score_th, toggle_keypress)
     if keypoints[0][1] > image.shape[0] / 5 * 2:
         movement = "Crouch"
 
+    # If hands are raised pause the game.
     # ESC to exit text
     cv.putText(
         image,
@@ -274,7 +262,14 @@ def draw_keypoints(image, keypoints, scores, keypoint_score_th, toggle_keypress)
         1,
         cv.LINE_AA,
     )
-
+    # Jump Line
+    cv.line(
+        image,
+        (0, int(image.shape[0] / 5)),
+        (image.shape[1], int(image.shape[0] / 5)),
+        (255, 255, 255),
+        2,
+    )
     # Draw horizontal line (2/5 of the frame)
     cv.line(
         image,
@@ -337,7 +332,7 @@ def main():
         if not ret:
             sys.exit("Failed to read frame!")
 
-        # Flip frame
+        # Flip frame for mirroring
         frame = cv.flip(frame, 1)
 
         # Run inference

@@ -4,45 +4,19 @@ from cvzone.SelfiSegmentationModule import SelfiSegmentation
 import tensorflow as tf
 import tensorflow_hub as hub
 import numpy as np
-import sys
-import argparse
-import copy
+import streamlit as st
 import pyautogui
 import datetime
+import time
 
 # Faster pyautogui
 pyautogui.PAUSE = 0
 pyautogui.MINIMUM_SLEEP = 0
 pyautogui.FAILSAFE = False
 
-# Key actions
-KEY_LEFT = "left"
-KEY_RIGHT = "right"
-KEY_UP = "up"
-KEY_DOWN = "down"
-
-
 def log_info(message):
     date_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     print(f"[{date_time}] {message}")
-
-
-def get_args():
-    """
-    Get arguments passed to script
-    """
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument("--device", type=int, default=0, help="Camera device")
-    parser.add_argument("--width", help="Frame width", type=int, default=960)
-    parser.add_argument("--height", help="Frame height", type=int, default=540)
-    parser.add_argument(
-        "--keypoint_score", type=float, default=0.3, help="Keypoint score threshold"
-    )
-
-    args = parser.parse_args()
-
-    return args
 
 def run_inference(model, input_size, image):
     """
@@ -53,27 +27,21 @@ def run_inference(model, input_size, image):
     # Preprocess image
     input_image = cv.resize(image, dsize=(input_size, input_size))  # Resize
     input_image = cv.cvtColor(input_image, cv.COLOR_BGR2RGB)  # BGR to RGB
-    input_image = cv.GaussianBlur(input_image, (5,5),0) # Gaussian blur
+    input_image = cv.GaussianBlur(input_image, (5,5), 0)  # Gaussian blur
     input_image = input_image.reshape(-1, input_size, input_size, 3)
     input_image = tf.cast(input_image, dtype=tf.int32)  # Cast to int32
+    
     # Run model
     outputs = model(input_image)
 
     keypoints_with_scores = outputs["output_0"].numpy()
-    print(keypoints_with_scores)
     keypoints_with_scores = np.squeeze(keypoints_with_scores)
-    print(keypoints_with_scores)
 
     # Keypoints, Scores
     keypoints = []
     scores = []
 
-    """ 17 keypoints
-    (in the order of: [nose, left eye, right eye, left ear, right ear, left shoulder, right shoulder, left elbow, right elbow, left wrist, right wrist, left hip, right hip, left knee, right knee, left ankle, right ankle]
-    
-    See: https://tfhub.dev/google/movenet/singlepose/lightning/4
-    """
-    for idx in [i for i in range(17) if i not in [3,4]]: # Skip left and right ear
+    for idx in [i for i in range(17) if i not in [3,4]]:  # Skip left and right ear
         keypoint_x = int(keypoints_with_scores[idx][1] * image_width)
         keypoint_y = int(keypoints_with_scores[idx][0] * image_height)
         score = keypoints_with_scores[idx][2]
@@ -83,374 +51,274 @@ def run_inference(model, input_size, image):
 
     return keypoints, scores
 
-def draw_keypoints(image, keypoints, scores, keypoint_score_th):
+def draw_keypoints(image, keypoints, scores, keypoint_score_th, show_skeleton=True, show_guidelines=True):
     circle_color_outer = (255, 255, 255)  # White
     circle_color_inner = (0, 0, 255)  # Red
     line_skeleton_color = (0, 255, 0)  # Green
     
-    # Draw line right eye to nose (Left eye on frame because of mirror)
-    index1, index2 = 1, 0
-    if scores[index1] > keypoint_score_th and scores[index2] > keypoint_score_th:
-        point1 = keypoints[index1]
-        point2 = keypoints[index2]
-        cv.line(image, point1, point2, line_skeleton_color, 2)
+    # Create a copy of the image to draw on
+    output_img = image.copy()
+    
+    # Draw skeleton lines if enabled
+    if show_skeleton:
+        # Eyes to nose
+        for idx1, idx2 in [(1, 0), (2, 0)]:
+            if scores[idx1] > keypoint_score_th and scores[idx2] > keypoint_score_th:
+                cv.line(output_img, keypoints[idx1], keypoints[idx2], line_skeleton_color, 2)
+        
+        # Shoulders
+        if scores[3] > keypoint_score_th and scores[4] > keypoint_score_th:
+            cv.line(output_img, keypoints[3], keypoints[4], line_skeleton_color, 2)
+        
+        # Arms
+        for idx1, idx2 in [(3, 5), (5, 7), (4, 6), (6, 8)]:
+            if scores[idx1] > keypoint_score_th and scores[idx2] > keypoint_score_th:
+                cv.line(output_img, keypoints[idx1], keypoints[idx2], line_skeleton_color, 2)
+        
+        # Torso
+        for idx1, idx2 in [(3, 9), (4, 10), (9, 10)]:
+            if scores[idx1] > keypoint_score_th and scores[idx2] > keypoint_score_th:
+                cv.line(output_img, keypoints[idx1], keypoints[idx2], line_skeleton_color, 2)
+        
+        # Legs
+        for idx1, idx2 in [(9, 11), (11, 13), (10, 12), (12, 14)]:
+            if scores[idx1] > keypoint_score_th and scores[idx2] > keypoint_score_th:
+                cv.line(output_img, keypoints[idx1], keypoints[idx2], line_skeleton_color, 2)
 
-    # Draw line left eye to nose (Right eye on frame because of mirror)
-    index1, index2 = 2, 0
-    if scores[index1] > keypoint_score_th and scores[index2] > keypoint_score_th:
-        point1 = keypoints[index1]
-        point2 = keypoints[index2]
-        cv.line(image, point1, point2, line_skeleton_color, 2)
+        # Draw keypoints
+        for keypoint, score in zip(keypoints, scores):
+            if score > keypoint_score_th:
+                cv.circle(output_img, keypoint, 6, circle_color_outer, -1)  # White outer circle
+                cv.circle(output_img, keypoint, 3, circle_color_inner, -1)  # Red inner circle
 
-    # Draw line left shoulder to right shoulder (Left shoulder on frame because of mirror)
-    index1, index2 = 3, 4
-    if scores[index1] > keypoint_score_th and scores[index2] > keypoint_score_th:
-        point1 = keypoints[index1]
-        point2 = keypoints[index2]
-        cv.line(image, point1, point2, line_skeleton_color, 2)
-
-    # Draw line left shoulder to left elbow (Right shoulder on frame because of mirror)
-    index1, index2 = 3, 5
-    if scores[index1] > keypoint_score_th and scores[index2] > keypoint_score_th:
-        point1 = keypoints[index1]
-        point2 = keypoints[index2]
-        cv.line(image, point1, point2, line_skeleton_color, 2)
-
-    # Draw line left elbow to left wrist (Right elbow on frame because of mirror)
-    index1, index2 = 5, 7
-    if scores[index1] > keypoint_score_th and scores[index2] > keypoint_score_th:
-        point1 = keypoints[index1]
-        point2 = keypoints[index2]
-        cv.line(image, point1, point2, line_skeleton_color, 2)
-
-    # Draw line right shoulder to right elbow (Left shoulder on frame because of mirror)
-    index1, index2 = 4, 6
-    if scores[index1] > keypoint_score_th and scores[index2] > keypoint_score_th:
-        point1 = keypoints[index1]
-        point2 = keypoints[index2]
-        cv.line(image, point1, point2, line_skeleton_color, 2)
-
-    # Draw line right elbow to right wrist (Left elbow on frame because of mirror)
-    index1, index2 = 6, 8
-    if scores[index1] > keypoint_score_th and scores[index2] > keypoint_score_th:
-        point1 = keypoints[index1]
-        point2 = keypoints[index2]
-        cv.line(image, point1, point2, line_skeleton_color, 2)
-
-    # Draw line left shoulder to left hip (Right shoulder on frame because of mirror)
-    index1, index2 = 3, 9
-    if scores[index1] > keypoint_score_th and scores[index2] > keypoint_score_th:
-        point1 = keypoints[index1]
-        point2 = keypoints[index2]
-        cv.line(image, point1, point2, line_skeleton_color, 2)
-
-    # Draw line right shoulder to right hip (Left shoulder on frame because of mirror)
-    index1, index2 = 4, 10
-    if scores[index1] > keypoint_score_th and scores[index2] > keypoint_score_th:
-        point1 = keypoints[index1]
-        point2 = keypoints[index2]
-        cv.line(image, point1, point2, line_skeleton_color, 2)
-
-    # Draw line left hip to right hip (Left hip on frame because of mirror)
-    index1, index2 = 9, 10
-    if scores[index1] > keypoint_score_th and scores[index2] > keypoint_score_th:
-        point1 = keypoints[index1]
-        point2 = keypoints[index2]
-        cv.line(image, point1, point2, line_skeleton_color, 2)
-
-    # Draw line left hip to left knee (Right hip on frame because of mirror)
-    index1, index2 = 9, 11
-    if scores[index1] > keypoint_score_th and scores[index2] > keypoint_score_th:
-        point1 = keypoints[index1]
-        point2 = keypoints[index2]
-        cv.line(image, point1, point2, line_skeleton_color, 2)
-
-    # Draw line left knee to left ankle (Right knee on frame because of mirror)
-    index1, index2 = 11, 13
-    if scores[index1] > keypoint_score_th and scores[index2] > keypoint_score_th:
-        point1 = keypoints[index1]
-        point2 = keypoints[index2]
-        cv.line(image, point1, point2, line_skeleton_color, 2)
-
-    # Draw line right hip to right knee (Left hip on frame because of mirror)
-    index1, index2 = 10, 12
-    if scores[index1] > keypoint_score_th and scores[index2] > keypoint_score_th:
-        point1 = keypoints[index1]
-        point2 = keypoints[index2]
-        cv.line(image, point1, point2, line_skeleton_color, 2)
-
-    # Draw line right knee to right ankle (Left knee on frame because of mirror)
-    index1, index2 = 12, 14
-    if scores[index1] > keypoint_score_th and scores[index2] > keypoint_score_th:
-        point1 = keypoints[index1]
-        point2 = keypoints[index2]
-        cv.line(image, point1, point2, line_skeleton_color, 2)
-
-    # Draw keypoints (Circle)
-    for keypoint, score in zip(keypoints, scores):
-        if score > keypoint_score_th:
-            cv.circle(image, keypoint, 6, circle_color_outer, -1)  # White outer circle
-            cv.circle(image, keypoint, 3, circle_color_inner, -1)  # Red inner circle
-
+    # Logic for movement
     # Horizontal Movement
-    # Right Movement (Right Shoulder the right half of the frame, because it's mirrored)
-    if keypoints[4][0] > image.shape[1] / 2:
+    if keypoints[4][0] > output_img.shape[1] / 2:
         movement = "Right"
-    elif keypoints[3][0] < image.shape[1] / 2:
+    elif keypoints[3][0] < output_img.shape[1] / 2:
         movement = "Left"
     else:
         movement = "Standing"
 
     # Vertical Movement
-    # Jump Movement (Left shoulder, right shoulder in the top /5 of the frame)
-    if (
-        keypoints[1][1] < image.shape[0] / 5 
-        and keypoints[2][1] < image.shape[0] / 5
-    ):
+    if keypoints[1][1] < output_img.shape[0] / 5 and keypoints[2][1] < output_img.shape[0] / 5:
         movement = "Jump"
 
-    # Crouch Movement (Nose in the bottom 2/5 of the frame)
-    if keypoints[0][1] > image.shape[0] / 5 * 2:
+    # Crouch Movement
+    if keypoints[0][1] > output_img.shape[0] / 5 * 2:
         movement = "Crouch"
 
-    # If both hands are raised pause the game.
-    if keypoints[8][1] < image.shape[0] / 5 * 2 and keypoints[7][1] < image.shape[0] / 5 * 2:
+    # Special gestures
+    if keypoints[8][1] < output_img.shape[0] / 5 * 2 and keypoints[7][1] < output_img.shape[0] / 5 * 2:
         movement = "Pause/Resume"
-    # If either hand is raised power up
-    elif keypoints[8][1] < image.shape[0] / 5 * 2 or keypoints[7][1] < image.shape[0] / 5 * 2:
+    elif keypoints[8][1] < output_img.shape[0] / 5 * 2 or keypoints[7][1] < output_img.shape[0] / 5 * 2:
         movement = "Power Up"
-    # ESC to exit text
-    cv.putText(
-        image,
-        "Press q to exit",
-        (10, 30),
-        cv.FONT_HERSHEY_SIMPLEX,
-        0.5,
-        (255, 255, 255),
-        1,
-        cv.LINE_AA,
-    )
 
-    # Movement Label text (Bottom left)
-    cv.putText(
-        image,
-        "Movement:",
-        (10, 60),
-        cv.FONT_HERSHEY_SIMPLEX,
-        0.5,
-        (255, 255, 255),
-        1,
-        cv.LINE_AA,
-    )
+    # Draw guidelines if enabled
+    if show_guidelines:
+        # Jump line
+        cv.line(output_img, (0, int(output_img.shape[0] / 5)), 
+                (output_img.shape[1], int(output_img.shape[0] / 5)), (255, 255, 255), 2)
+        # Crouch line
+        cv.line(output_img, (0, int(output_img.shape[0] / 5 * 2)), 
+                (output_img.shape[1], int(output_img.shape[0] / 5 * 2)), (255, 255, 255), 2)
+        # Vertical Center line
+        cv.line(output_img, (int(output_img.shape[1] / 2), 0), 
+                (int(output_img.shape[1] / 2), output_img.shape[0]), (255, 255, 255), 2)
 
-    # Movement Value text (Bottom left)
-    cv.putText(
-        image,
-        movement,
-        (100, 60),
-        cv.FONT_HERSHEY_SIMPLEX,
-        0.5,
-        (255, 255, 255),
-        1,
-        cv.LINE_AA,
-    )
-    # Jump Line
-    cv.line(
-        image,
-        (0, int(image.shape[0] / 5)),
-        (image.shape[1], int(image.shape[0] / 5)),
-        (255, 255, 255),
-        2,
-    )
-    # Draw horizontal line (2/5 of the frame)
-    cv.line(
-        image,
-        (0, int(image.shape[0] / 5 * 2)),
-        (image.shape[1], int(image.shape[0] / 5 * 2)),
-        (255, 255, 255),
-        2,
-    )
+    return output_img, movement
 
-    # Draw vertical line (Center)
-    cv.line(
-        image,
-        (int(image.shape[1] / 2), 0),
-        (int(image.shape[1] / 2), image.shape[0]),
-        (255, 255, 255),
-        2,
-    )
-
-    return image, movement
-
-def apply_background_replacement(frame, bg_image, segmentor, use_background):
+def apply_background_replacement(frame, bg_image, segmentor):
     """
-    Applies background replacement if enabled.
+    Applies background replacement
     """
-    if use_background and bg_image is not None:
+    if bg_image is not None:
         # Resize background to match frame dimensions
         resized_bg = cv.resize(bg_image, (frame.shape[1], frame.shape[0]))
         # Replace background
         processed_frame = segmentor.removeBG(frame, resized_bg, threshold=0.5)
+        return processed_frame
     else:
-        processed_frame = frame
-    return processed_frame
+        return frame
 
-def main():
+def handle_movement(frame_movement, last_movement):
     """
-    Main function
+    Handles movement keypresses and logs.
+    Returns the updated last_movement.
     """
-    # Get arguments
-    args = get_args()
-    cap_device = args.device
-    cap_width = args.width
-    cap_height = args.height
-    keypoint_score_th = args.keypoint_score
+    if frame_movement != last_movement:
+        if frame_movement == "Right":
+            pyautogui.press("right")
+            log_info("Keypress: Right")
+            last_movement = "Right"
+            
+        elif frame_movement == "Left":
+            pyautogui.press("left")
+            log_info("Keypress: Left")
+            last_movement = "Left"
+            
+        elif frame_movement == "Jump":
+            pyautogui.press("up")
+            log_info("Keypress: Up")
+            last_movement = "Jump"
+            
+        elif frame_movement == "Crouch":
+            pyautogui.press("down")
+            log_info("Keypress: Down")
+            last_movement = "Crouch"
+            
+        elif frame_movement == "Standing":
+            if last_movement == "Right":
+                pyautogui.press("left")
+                log_info("Keypress: Left")
+            elif last_movement == "Left":
+                pyautogui.press("right")
+                log_info("Keypress: Right")
+            last_movement = "Standing"
+            
+        elif frame_movement == "Pause/Resume":
+            pyautogui.press("esc")
+            log_info("Keypress: Pause/Resume")
+            last_movement = "Pause/Resume"
+            
+        elif frame_movement == "Power Up":
+            pyautogui.press("space")
+            log_info("Keypress: Space (Power Up)")
+            
+        log_info(f"Movement: {frame_movement}")
+    
+    return last_movement
 
-    # Open camera
-    cap = cv.VideoCapture(cap_device)
-    cap.set(cv.CAP_PROP_FRAME_WIDTH, cap_width)
-    cap.set(cv.CAP_PROP_FRAME_HEIGHT, cap_height)
+# Main Streamlit App
+st.set_page_config(page_title="Poseplay Controller", layout="wide")
+st.title("Poseplay Controller (Subway Surfer)")
 
-    # Model (MoveNet Lightning), use pre-trained model from TensorFlow Hub
-    input_size = 192
+# Set up the sidebar with toggle controls
+st.sidebar.title("Display Controls")
+use_background = st.sidebar.checkbox("Show Background", value=True)
+show_skeleton = st.sidebar.checkbox("Show Skeleton", value=True)
+show_guidelines = st.sidebar.checkbox("Show Guidelines", value=True)
+
+# Create layout
+col1, col2 = st.columns([3, 1])
+
+with col1:
+    # Camera feed placeholder
+    video_placeholder = st.empty()
+
+with col2:
+    # Stats display
+    st.subheader("Game Controls")
+    st.markdown("""
+    Move your body to control Subway Surfers:
+    
+    - **Left/Right**: Move shoulders across center line
+    - **Jump**: Raise head above top line
+    - **Crouch**: Lower head below bottom line
+    - **Power Up**: Raise one hand
+    - **Pause/Resume**: Raise both hands
+    """)
+    
+    st.subheader("Current Status")
+    movement_text = st.empty()
+    count_text = st.empty()
+
+# Load model
+with st.spinner("Loading pose detection model..."):
     model_url = "https://tfhub.dev/google/movenet/singlepose/lightning/4"
-    model_load = hub.load(model_url)
-    model = model_load.signatures["serving_default"]
+    model = hub.load(model_url).signatures["serving_default"]
+    st.success("Model loaded successfully!")
 
-    # Last movement
-    last_movement = "Standing"
-    
-    # Initialize segmentor
-    segmentor = SelfiSegmentation()
-    
-    # Load background image
-    try:
-        bg_image = cv.imread("background.jpeg")
-        if bg_image is None:
-            raise Exception("Could not load background.jpeg")
-        print("Background image loaded successfully!")
-        use_background = True
-    except Exception as e:
-        print(f"Error loading background: {e}")
-        print("Will continue without background replacement.")
-        use_background = False
+# Initialize segmentation
+segmentor = SelfiSegmentation()
+
+# Load background image
+try:
+    bg_image = cv.imread("background.jpeg")
+    if bg_image is not None:
+        st.sidebar.success("Background image loaded!")
+    else:
+        st.sidebar.warning("No background image found. Using plain camera feed.")
         bg_image = None
+except Exception as e:
+    st.sidebar.error(f"Error loading background: {e}")
+    bg_image = None
 
-    # Exit if camera not opened
+# Initialize camera
+try:
+    cap = cv.VideoCapture(0)
     if not cap.isOpened():
-        sys.exit("Failed to open camera!")
+        st.error("Failed to open camera!")
+        st.stop()
+except Exception as e:
+    st.error(f"Camera error: {e}")
+    st.stop()
 
-    # Loop frames
+# Initialize variables
+last_movement = "Standing"
+movement_count = 0
+frame_count = 0
+start_time = time.time()
+fps = 0
+
+# Main loop
+try:
     while True:
         # Read frame
         ret, frame = cap.read()
-
-        # Exit if frame not read
+        
         if not ret:
-            sys.exit("Failed to read frame!")
-
-        # Flip frame for mirroring
-        frame = cv.flip(frame, 1)
-
-        # Apply background replacement using the new function
-        processed_frame = apply_background_replacement(frame, bg_image, segmentor, use_background)
+            st.error("Failed to read from camera!")
+            break
             
-        # Run inference on the processed frame
-        keypoints, scores = run_inference(model, input_size, processed_frame)
-
-        # Copy processed frame
-        frame_copy = copy.deepcopy(processed_frame)
+        # Flip frame
+        frame = cv.flip(frame, 1)
         
-        # Draw frame with keypoints
-        draw_frame, frame_movement = draw_keypoints(
-            frame_copy, keypoints, scores, keypoint_score_th 
-        )
-        
-        # Display background status
+        # Apply background replacement if enabled
         if use_background and bg_image is not None:
-            cv.putText(
-                draw_frame,
-                "Custom Background: ON (Press 'B' to toggle)",
-                (10, draw_frame.shape[0] - 10),
-                cv.FONT_HERSHEY_SIMPLEX,
-                0.5,
-                (255, 255, 255),
-                1,
-                cv.LINE_AA,
-            )
-
-        # Movement keypress
-        if frame_movement == "Right":
-            if last_movement != "Right":
-                pyautogui.press(KEY_RIGHT)
-                log_info("Keypress: Right")
-                last_movement = "Right"
-                log_info("Movement: Right")
-
-        if frame_movement == "Left":
-            if last_movement != "Left":
-                pyautogui.press(KEY_LEFT)
-                log_info("Keypress: Left")
-                last_movement = "Left"
-                log_info("Movement: Left")
-
-        if frame_movement == "Jump":
-            if last_movement != "Jump":
-                pyautogui.press(KEY_UP)
-                log_info("Keypress: Up")
-                last_movement = "Jump"
-                log_info("Movement: Jump")
-
-        if frame_movement == "Crouch":
-            if last_movement != "Crouch":
-                pyautogui.press(KEY_DOWN)
-                log_info("Keypress: Down")
-                last_movement = "Crouch"
-                log_info("Movement: Crouch")
-
-        if frame_movement == "Standing":
-            if last_movement != "Standing":
-                if last_movement == "Right":
-                    pyautogui.press("left")
-                    log_info("Keypress: Left")
-
-                if last_movement == "Left":
-                    pyautogui.press("right")
-                    log_info("Keypress: Right")
-
-                last_movement = "Standing"
-                log_info("Movement: Standing")
-                
-        if frame_movement == "Pause/Resume":
-            if last_movement != "Pause/Resume":
-                pyautogui.press("esc")
-                log_info("Keypress: Pause/Resume")
-                last_movement = "Pause/Resume"
-                log_info("Movement: Pause/Resume")
-
-        if frame_movement == "Power Up":
-            pyautogui.press("space")
-
-        # Opencv KeyPress
-        cvkey = cv.waitKey(1)
-        if cvkey:
-            # q to exit
-            if cvkey == ord('q'):
-                break
-                
-            # b to toggle background
-            if cvkey == ord('b') and bg_image is not None:
-                use_background = not use_background
-                status = "ON" if use_background else "OFF"
-                log_info(f"Custom Background: {status}")
-                
-        # Display frame
-        cv.imshow("Subway Surfer Controller", draw_frame)
-
-    # Release camera
-    cap.release()
-    cv.destroyAllWindows()
-
-
-if __name__ == "__main__":
-    main()
+            processed_frame = apply_background_replacement(frame, bg_image, segmentor)
+        else:
+            processed_frame = frame
+            
+        # Run inference
+        keypoints, scores = run_inference(model, 192, processed_frame)
+        
+        # Draw visualization
+        visualization, frame_movement = draw_keypoints(
+            processed_frame, keypoints, scores, 0.3, 
+            show_skeleton=show_skeleton, 
+            show_guidelines=show_guidelines
+        )
+            
+        # Handle movement
+        last_movement = handle_movement(frame_movement, last_movement)
+            
+        # Count movements
+        if frame_movement != "Standing" and frame_movement != last_movement:
+            movement_count += 1
+            
+        # Calculate FPS
+        frame_count += 1
+        elapsed = time.time() - start_time
+        if elapsed >= 1.0:
+            fps = frame_count / elapsed
+            frame_count = 0
+            start_time = time.time()
+            
+        # Convert for display
+        rgb_frame = cv.cvtColor(visualization, cv.COLOR_BGR2RGB)
+        
+        # Update UI
+        video_placeholder.image(rgb_frame, channels="RGB", use_column_width=True)
+        movement_text.markdown(f"**Current Movement:** {frame_movement}")
+        count_text.markdown(f"**Movement Count:** {movement_count} | **FPS:** {fps:.1f}")
+        
+        # Small delay to prevent UI freezing
+        time.sleep(0.01)
+        
+except Exception as e:
+    st.error(f"Error: {e}")
+finally:
+    # Clean up
+    if 'cap' in locals() and cap is not None:
+        cap.release()

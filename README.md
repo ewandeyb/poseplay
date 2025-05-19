@@ -41,10 +41,5 @@ I've added hand gestures for power-ups, pausing or resuming the game, GUI to dis
 - Different filters based on the game that you're playing
 - Performance optimizations for smoother gameplay
 
-## Acknowledgments
-- Original implementation by [bahirul](https://github.com/bahirul)
-- MoveNet model from [TensorFlow Hub](https://tfhub.dev/google/movenet/singlepose/lightning/4)
-- SelfiSegmentation from cvzone
-
 ---
 *This project was developed as part of CMSC 191 - Computer Vision in Python final project.*

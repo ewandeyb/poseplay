@@ -93,26 +93,23 @@ def draw_keypoints(image, keypoints, scores, keypoint_score_th, show_skeleton=Tr
 
     # Logic for movement
     # Horizontal Movement
-    if keypoints[4][0] > output_img.shape[1] / 2:
+    if keypoints[8][1] < output_img.shape[0] / 5 * 2 and keypoints[7][1] < output_img.shape[0] / 5 * 2:
+        movement = "Pause/Resume"
+    elif keypoints[8][1] < output_img.shape[0] / 5 * 2 or keypoints[7][1] < output_img.shape[0] / 5 * 2:
+        movement = "Power Up"
+    # Jump
+    elif keypoints[1][1] < output_img.shape[0] / 5 and keypoints[2][1] < output_img.shape[0] / 5:
+        movement = "Jump"
+    # Crouch
+    elif keypoints[0][1] > output_img.shape[0] / 5 * 2:
+        movement = "Crouch"
+    # Horizontal Movement
+    elif keypoints[4][0] > output_img.shape[1] / 2:
         movement = "Right"
     elif keypoints[3][0] < output_img.shape[1] / 2:
         movement = "Left"
     else:
         movement = "Standing"
-
-    # Vertical Movement
-    if keypoints[1][1] < output_img.shape[0] / 5 and keypoints[2][1] < output_img.shape[0] / 5:
-        movement = "Jump"
-
-    # Crouch Movement
-    if keypoints[0][1] > output_img.shape[0] / 5 * 2:
-        movement = "Crouch"
-
-    # Special gestures
-    if keypoints[8][1] < output_img.shape[0] / 5 * 2 and keypoints[7][1] < output_img.shape[0] / 5 * 2:
-        movement = "Pause/Resume"
-    elif keypoints[8][1] < output_img.shape[0] / 5 * 2 or keypoints[7][1] < output_img.shape[0] / 5 * 2:
-        movement = "Power Up"
 
     # Draw guidelines if enabled
     if show_guidelines:
@@ -189,137 +186,140 @@ def handle_movement(frame_movement, last_movement):
     
     return last_movement
 
-# Main Streamlit App
-st.set_page_config(page_title="Poseplay Controller", layout="wide")
-st.title("Poseplay Controller (Subway Surfer)")
+def main():
+    # Main Streamlit App
+    st.set_page_config(page_title="Poseplay Controller", layout="wide")
+    st.title("Poseplay Controller (Subway Surfer)")
 
-# Set up the sidebar with toggle controls
-st.sidebar.title("Settings")
-threshold = st.sidebar.slider("Keypoint Score Threshold", 0.0, 1.0, 0.3, 0.01)
-use_background = st.sidebar.checkbox("Show Background", value=True)
-show_skeleton = st.sidebar.checkbox("Show Skeleton", value=True)
-show_guidelines = st.sidebar.checkbox("Show Guidelines", value=True)
+    # Set up the sidebar with toggle controls
+    st.sidebar.title("Settings")
+    threshold = st.sidebar.slider("Keypoint Score Threshold", 0.0, 1.0, 0.3, 0.01)
+    use_background = st.sidebar.checkbox("Show Background", value=True)
+    show_skeleton = st.sidebar.checkbox("Show Skeleton", value=True)
+    show_guidelines = st.sidebar.checkbox("Show Guidelines", value=True)
 
-# Create layout
-col1, col2 = st.columns([3, 1])
+    # Create layout
+    col1, col2 = st.columns([3, 1])
 
-with col1:
-    # Camera feed placeholder
-    video_placeholder = st.empty()
+    with col1:
+        # Camera feed placeholder
+        video_placeholder = st.empty()
 
-with col2:
-    # Stats display
-    st.subheader("Game Controls")
-    st.markdown("""
-    Move your body to control Subway Surfers:
-    
-    - **Left/Right**: Move either shoulder across center line
-    - **Jump**: Raise head above top line
-    - **Crouch**: Lower head below bottom line
-    - **Power Up**: Raise one hand
-    - **Pause/Resume**: Raise both hands
-    """)
-    
-    st.subheader("Current Status")
-    movement_text = st.empty()
-    count_text = st.empty()
-
-# Load model
-with st.spinner("Loading pose detection model..."):
-    model_url = "https://tfhub.dev/google/movenet/singlepose/lightning/4"
-    model = hub.load(model_url).signatures["serving_default"]
-    st.success("Model loaded successfully!")
-
-# Initialize segmentation
-segmentor = SelfiSegmentation()
-
-# Load background image
-try:
-    bg_image = cv.imread("background.jpeg")
-    if bg_image is not None:
-        st.sidebar.success("Background image loaded!")
-    else:
-        st.sidebar.warning("No background image found. Using plain camera feed.")
-        bg_image = None
-except Exception as e:
-    st.sidebar.error(f"Error loading background: {e}")
-    bg_image = None
-
-# Initialize camera
-try:
-    cap = cv.VideoCapture(0)
-    if not cap.isOpened():
-        st.error("Failed to open camera!")
-        st.stop()
-except Exception as e:
-    st.error(f"Camera error: {e}")
-    st.stop()
-
-# Initialize variables
-last_movement = "Standing"
-movement_count = 0
-frame_count = 0
-start_time = time.time()
-fps = 0
-
-# Main loop
-try:
-    while True:
-        # Read frame
-        ret, frame = cap.read()
+    with col2:
+        # Stats display
+        st.subheader("Game Controls")
+        st.markdown("""
+        Move your body to control Subway Surfers:
         
-        if not ret:
-            st.error("Failed to read from camera!")
-            break
-            
-        # Flip frame
-        frame = cv.flip(frame, 1)
+        - **Left/Right**: Move either shoulder across center line
+        - **Jump**: Raise head above top line
+        - **Crouch**: Lower head below bottom line
+        - **Power Up**: Raise one hand
+        - **Pause/Resume**: Raise both hands
+        """)
         
-        # Apply background replacement if enabled
-        if use_background and bg_image is not None:
-            processed_frame = apply_background_replacement(frame, bg_image, segmentor)
+        st.subheader("Current Status")
+        movement_text = st.empty()
+        count_text = st.empty()
+
+    # Load model
+    with st.spinner("Loading pose detection model..."):
+        model_url = "https://tfhub.dev/google/movenet/singlepose/lightning/4"
+        model = hub.load(model_url).signatures["serving_default"]
+        st.success("Model loaded successfully!")
+
+    # Initialize segmentation
+    segmentor = SelfiSegmentation()
+
+    # Load background image
+    try:
+        bg_image = cv.imread("background.jpeg")
+        if bg_image is not None:
+            st.sidebar.success("Background image loaded!")
         else:
-            processed_frame = frame
+            st.sidebar.warning("No background image found. Using plain camera feed.")
+            bg_image = None
+    except Exception as e:
+        st.sidebar.error(f"Error loading background: {e}")
+        bg_image = None
+
+    # Initialize camera
+    try:
+        cap = cv.VideoCapture(0)
+        if not cap.isOpened():
+            st.error("Failed to open camera!")
+            st.stop()
+    except Exception as e:
+        st.error(f"Camera error: {e}")
+        st.stop()
+
+    # Initialize variables
+    last_movement = "Standing"
+    movement_count = 0
+    frame_count = 0
+    start_time = time.time()
+    fps = 0
+
+    # Main loop
+    try:
+        while True:
+            # Read frame
+            ret, frame = cap.read()
             
-        # Run inference
-        keypoints, scores = run_inference(model, 192, processed_frame) # 192 is the fixed input size for movenet
-        
-        # Draw visualization
-        visualization, frame_movement = draw_keypoints(
-            processed_frame, keypoints, scores, threshold, 
-            show_skeleton=show_skeleton, 
-            show_guidelines=show_guidelines
-        )
+            if not ret:
+                st.error("Failed to read from camera!")
+                break
+                
+            # Flip frame
+            frame = cv.flip(frame, 1)
             
-        # Handle movement
-        last_movement = handle_movement(frame_movement, last_movement)
+            # Apply background replacement if enabled
+            if use_background and bg_image is not None:
+                processed_frame = apply_background_replacement(frame, bg_image, segmentor)
+            else:
+                processed_frame = frame
+                
+            # Run inference
+            keypoints, scores = run_inference(model, 192, processed_frame) # 192 is the fixed input size for movenet
             
-        # Count movements
-        if frame_movement != "Standing" and frame_movement != last_movement:
-            movement_count += 1
+            # Draw visualization
+            visualization, frame_movement = draw_keypoints(
+                processed_frame, keypoints, scores, threshold, 
+                show_skeleton=show_skeleton, 
+                show_guidelines=show_guidelines
+            )
+                
+            # Handle movement
+            last_movement = handle_movement(frame_movement, last_movement)
+                
+            # Count movements
+            if frame_movement != "Standing" and frame_movement != last_movement:
+                movement_count += 1
+                
+            # Calculate FPS
+            frame_count += 1
+            elapsed = time.time() - start_time
+            if elapsed >= 1.0:
+                fps = frame_count / elapsed
+                frame_count = 0
+                start_time = time.time()
+                
+            # Convert for display
+            rgb_frame = cv.cvtColor(visualization, cv.COLOR_BGR2RGB)
             
-        # Calculate FPS
-        frame_count += 1
-        elapsed = time.time() - start_time
-        if elapsed >= 1.0:
-            fps = frame_count / elapsed
-            frame_count = 0
-            start_time = time.time()
+            # Update UI
+            video_placeholder.image(rgb_frame, channels="RGB", use_column_width=True)
+            movement_text.markdown(f"**Current Movement:** {frame_movement}")
+            count_text.markdown(f"**Movement Count:** {movement_count} | **FPS:** {fps:.1f}")
             
-        # Convert for display
-        rgb_frame = cv.cvtColor(visualization, cv.COLOR_BGR2RGB)
-        
-        # Update UI
-        video_placeholder.image(rgb_frame, channels="RGB", use_column_width=True)
-        movement_text.markdown(f"**Current Movement:** {frame_movement}")
-        count_text.markdown(f"**Movement Count:** {movement_count} | **FPS:** {fps:.1f}")
-        
-        # Small delay to prevent UI freezing
-        time.sleep(0.01)
-        
-except Exception as e:
-    st.error(f"Error: {e}")
-finally:
-    # Clean up
-    if 'cap' in locals() and cap is not None:
-        cap.release()
+            # Small delay to prevent UI freezing
+            time.sleep(0.01)
+            
+    except Exception as e:
+        st.error(f"Error: {e}")
+    finally:
+        # Clean up
+        if 'cap' in locals() and cap is not None:
+            cap.release()
+if __name__ == "__main__":
+    main()

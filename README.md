@@ -5,7 +5,7 @@ PosePlay is an interactive computer vision application that translates physical 
 
 Initially started, with code from [bahirul/subwaysuft-movenet](https://github.com/bahirul/subwaysuft-movenet). The original implementation was designed specifically for controlling Subway Surfers, through websites such as https://poki.com/en/g/subway-surfers with only using body movements. 
 
-I've added hand gestures for power-ups, pausing or resuming the game, GUI to display current movements, and a background replacement filter.
+I've added hand gestures for power-ups, pausing or resuming the game, GUI to display current movements, and a background filter.
 ## Key Features
 - **Real-time Pose Detection**: Uses Google's MoveNet Lightning model to detect 17 keypoints of the human body
 - **Gesture Recognition**: Identifies movements like left/right movements, jumping, crouching, and hand raises
